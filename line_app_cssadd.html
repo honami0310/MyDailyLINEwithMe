@@ -1,0 +1,195 @@
+    <!DOCTYPE html>
+    <html lang="ja">
+
+    <head>
+        <meta charset="utf-8">
+        <title>Chatアプリ</title>
+        <link rel="stylesheet" href="css/style.css">
+    </head>
+
+    <body>
+        <!-- コンテンツ表示画面 -->
+        <h3 class="head">-- My Daily LINE with Me ------------------------------------------</h3>
+        <div class="space10"></div>
+        <div>
+            <div class="select">
+                <p class="input">Input:</p>
+                    <select size="1" id="uname">
+                        <option></option>
+                        <option>メモを書く</option>
+                        <option>今日の占い</option>
+                        <option>今日の天気</option>
+                    </select>
+            </div>
+            <div class="space10"></div>
+            <div id="inputbox">
+                <textarea name="" id="text" cols="30" rows="10"></textarea>
+                <button id="send">送信</button>
+            </div>
+            <div class="space10"></div>
+            <div id="outputspace">
+                <div id="output"></div>
+            </div>
+        </div>
+        <!--/ コンテンツ表示画面 -->
+
+        <!-- JQuery -->
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+        <!-- JQuery -->
+
+        <!--** 以下Firebase **-->
+        <script type="module">
+            // Import the functions you need from the SDKs you need
+            // { initializeApp } で膨大なfirebaseの中から分割導入してる
+            import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+            // TODO: Add SDKs for Firebase products that you want to use　自分で使いたいのを読み込めの指示
+            // ※上のバージョンと合ってること確認する！（10.7.1)
+            import { getDatabase, ref, push, set, update, remove, onChildAdded, onChildRemoved, onChildChanged }
+                from "https://cdnjs.cloudflare.com/ajax/libs/firebase/10.7.1/firebase-database.js";
+            // https://firebase.google.com/docs/web/setup#available-libraries
+
+            // Your web app's Firebase configuration
+            // sift+alt+Fでフォーマットが整う
+            const firebaseConfig = {
+                apiKey: "",
+                // AIzaSyBYyGqJNjTKqPvr3frbKz9PEurCRLZAK7Q
+                authDomain: "fir-demo-hy.firebaseapp.com",
+                projectId: "fir-demo-hy",
+                storageBucket: "fir-demo-hy.appspot.com",
+                messagingSenderId: "245699715563",
+                appId: "1:245699715563:web:9fdfb5364d292d9b8339ae"
+            };
+
+            // Initialize Firebase
+            const app = initializeApp(firebaseConfig);
+            // 上のgetDatabaseを取る。データベースの参照を作成
+            // データベースの参照を作成。getDatabaseとrefを引っ張ってきている
+            const db = getDatabase(app);
+            // databaseの中に"chat"という領域を今から作りますよ、の意。
+            const dbRef = ref(db, "chat");
+
+
+
+            $("#send").on("click", function () {
+                // 占い
+                const choice = ["今日は絶好調！", "朝ごはんを食べるといいことがあるよ", "心配事はちゃんと歯を磨けば解決できる", "慌てたときは人の話に耳を傾けると吉"];
+                const r = Math.ceil(Math.random() * 3);
+                // 天気
+                $.getJSON("https://www.jma.go.jp/bosai/forecast/data/overview_forecast/130000.json", function (w) {
+                    console.dir(w);
+                    let whether = w.text;
+
+                    // 送信データ
+                    // 受信側のonChildAddedでifを使うと別ウィンドウの方に反映されなかったので（送信時点での条件を受信側に設けると、送信してないもう1方は条件満たさないからっぽい）ここで設定
+                    // 代わりにすべてresultにしたため占いも天気も変更できる点課題
+                    let msg;
+                    if ($("#uname").val() === "メモを書く") {
+                        msg = {
+                            uname: "メモ",
+                            //メモ内容
+                            result: $("#text").val(),
+                            //日時
+                            now: new Date().toString() //firebaseはnew dateの関数に対応していないのでtoStringで文字に変換
+                        };
+                    }
+                    if ($("#uname").val() === "今日の占い") {
+                        msg = {
+                            uname: "今日の占い",
+                            // $("#uname").val(), //元のuname自体飛ばしてた時の式
+                            //占い結果を送付
+                            result: choice[r],
+                            //日時
+                            now: new Date().toString() //firebaseはnew dateの関数に対応していないのでtoStringで文字に変換
+                        };
+                    }
+                    if ($("#uname").val() === "今日の天気") {
+                        msg = {
+                            uname: "今日の天気",
+                            // 今日の天気
+                            result: whether,
+                            //日時
+                            now: new Date().toString() //firebaseはnew dateの関数に対応していないのでtoStringで文字に変換
+                        };
+                    
+                    }
+                    console.log(msg);
+
+                    
+                    // newPostRef：chatのとこに識別するランダムな文字列(ランダムキー。ID番号てきなもの)を生成するもの。
+                    const newPostRef = push(dbRef);
+                    set(newPostRef, msg);
+                    $("#text").val("");
+                });
+            });
+            
+
+            // dataとは？consoleで確認。
+            // onChildAddedは、送信、を押すと実行されるもの。一番下に追加する、の意。＆これを書くとaddしたもの以外も実行してくれる。
+            // 質問！！(data)を設定してdataのvalやkeyをとるようにしているけど、dvRef.val()とかはなんでダメなの？
+            onChildAdded(dbRef, function (data) {
+                const msg = data.val();
+                // keyはappend,prepandでは使わないが削除、更新に必須！！！
+                const key = data.key;//ユニークキーの取得
+                let h = '<div id="' + key + '">';//+key+でkeyの中身を指定。"key"だとkeyて文字になっちゃう。中の' 'はわからない、その後あったほうがいいのかも。
+                    h += "<table><tr><th class='unamespace'>" + msg.uname + "</th>";
+                    h += "<th class='nowspace'>" + msg.now + "</th></tr>";
+                    // 以下追加。直接その場で更新できるコード。id='"+key+"_update'は'と'で文字にしてて、「keyの名前+_update」てid名になる
+                    h += "<tr><th colspan='2' class='resultarea' style='white-space: pre-line; text-align: left;'>"
+                        h +="<span contentEditable='true' id='" + key + "_update'>" + msg.result + "</span>";
+                    h += "</th></tr></table>"
+                    // h += msg.whether;
+                    // h += msg.fortune;
+                        //data-〇〇属性は唯一自分で作れる！aでもbでも。他はidとかhrefとか指定の属性
+                        // data-key は各データのユニークなキー (data.key) を HTML 要素の属性として持つための任意の名前を使った属性値
+                    h += "<div class='btn'>"
+                        h += "<span style='margin: 0 5px;' class='remove' data-key='" + key + "'><button>suteru</button></span>"
+                        h += "<span style='margin: 0 5px;' class='update' data-key='" + key + "'><button>kaeru</button></span>"
+                        // h += msg.text;修正削除ないときに作ってたもの。span contentEditable~のがあるから不要
+                    h += "</div>"
+                    h += "<div class='space10'></div>";
+                    h += "<div class='border'></div>"
+                h += "</div>";
+                $("#output").prepend(h); // #output の最後に追加
+            });
+
+            // 削除イベント
+            // output部分に作用する。functionに第二引数.removeがある！new".はclass(復習)。outputの中のremoveを監視
+            // そこがクリックされたら{}が作用する、ということ。
+            $("#output").on("click", ".remove", function () {
+                // thisは、色々removeボタンある中で、ここにだけ作用する、の意。attrはattribute(属性)。removeをクリックしたとこのkeyだけを取る
+                const key = $(this).attr("data-key");
+                console.log("Removing data with key:", key);
+                const remove_item = ref(db, "chat/" + key);
+                //removeは関数。
+                remove(remove_item); //Firebaseデータが削除される。まだこの段階では表示はされない。onChildRemovedで表示も変わる。
+            });
+
+            // 更新イベント
+            $("#output").on("click", ".update", function () {
+                // thisは、色々removeボタンある中で、ここにだけ作用する、の意。attrはattribute(属性)。removeをクリックしたとこのkeyだけを取る
+                const key = $(this).attr("data-key");
+                update(ref(db, "chat/" + key), {
+                    text: $("#" + key + "_update").html(),
+                });
+                //removeは関数。
+            });
+
+            // 削除処理がFirebase側で実行されたらイベントが発生する
+            onChildRemoved(dbRef, (data) => {
+                console.log(data.key,"keydesu");
+                $("#" + data.key).remove(); //dom操作関数。()忘れずに      
+                console.log("Child removed with key:", data.key); 
+            });
+
+            // 更新処理がFirebase側で実行されたらイベントが発生する。
+            //onChildChangedは監視してたとこになにか変更があったら何するか指示できる
+            onChildChanged(dbRef, (data) => {
+                $("#" + data.key + "_update").html(data.val().text);
+                $("#" + data.key + "_update").fadeOut(800).fadeIn(800);
+            });
+        </script>
+    </body>
+
+    </html>
+    <!-- 質問①　removeが表示を消してくれない -->
+    <!-- 質問②しばらくすると入力したものがundefinedになるのはなぜ -->
